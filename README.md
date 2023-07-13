@@ -48,7 +48,7 @@ Here's a breakdown of the playbook's structure and tasks:
    - Ansible and Ansible-galaxy
    - amazon.aws collection (latest version)
 
-# Usage
+# Usage:
 1. Clone the repository from the github.
 2. Make sure you have Ansible installed and configured on your local machine.
 3. Run the playbook using the following command: "sudo ansible-playbook main.yaml"
