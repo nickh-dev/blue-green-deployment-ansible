@@ -1,0 +1,131 @@
+---
+
+- hosts: localhost
+  vars_prompt:
+     - name: aws_access_key
+       prompt: "Enter AWS access key"
+       private: no
+     - name: aws_secret_key
+       prompt: "Enter AWS secret key"
+       private: no
+     - name: region
+       prompt: "Enter the region"
+       private: no
+  tasks:
+     - name: Ensure boto existence
+       pip:
+        name:
+          - boto3
+          - botocore
+        executable: pip3
+        state: present
+
+     - name: Creating Security Group
+       amazon.aws.ec2_security_group:
+         aws_access_key: "{{ aws_access_key }}"
+         aws_secret_key: "{{ aws_secret_key }}"
+         name: "high_az_sg"
+         description: Security Group for High AZ Server
+         region: "{{ region }}"
+         rules:
+           - proto: tcp
+             from_port: 22
+             to_port: 22
+             cidr_ip: 0.0.0.0/0
+           - proto: tcp
+             from_port: 80
+             to_port: 80
+             cidr_ip: 0.0.0.0/0
+         rules_egress:
+           - proto: tcp
+             from_port: 0
+             to_port: 6553
+             cidr_ip: 0.0.0.0/0
+       register: security_group
+
+     - name: Creating ELB
+       amazon.aws.elb_classic_lb:
+        region: "{{ region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        zones:
+          - eu-central-1a
+          - eu-central-1b
+          - eu-central-1c
+        security_group_ids: "{{ security_group.group_id }}"
+        name: "high-az-elb"
+
+        listeners:
+          - protocol: http
+            load_balancer_port: 80
+            instance_port: 80  
+
+        health_check:
+          ping_protocol: tcp
+          ping_port: 80
+          response_timeout: 5
+          unhealthy_threshold: 2
+          healthy_threshold: 2
+          interval: 30
+
+        cross_az_load_balancing: "yes"
+        idle_timeout: 400
+        connection_draining_timeout: 400
+        state: present
+       register: elb
+
+     - name: Set DNS Addresse
+       set_fact:
+        dns_address: "http://{{ elb.elb.dns_name }}"
+
+     - name: Display DNS Address
+       debug:
+          var: dns_address
+
+     - name: Creating launch configuration
+       community.aws.autoscaling_launch_config:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        name: "launch_config"
+        image_id: "ami-04e601abe3e1a910f"
+        key_name: "key_pair"
+        instance_type: "t2.micro"
+        region: "{{ region }}"
+        security_groups: [ "{{ security_group.group_id }}" ]
+        user_data: |
+          #!/bin/bash
+          # Update packages and install the Apache web server
+          sudo apt update
+          sudo apt install apache2 -y
+          # Start and enable Apache to automatically start at boot time
+          systemctl start apache2
+          systemctl enable --now apache2
+          systemctl restart apache2
+        state: present
+       register: lc_info
+
+     - name: Creating Auto Scaling Group
+       amazon.aws.autoscaling_group:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        name: "asGroup"
+        load_balancers: [ 'high-az-elb' ]
+        availability_zones: ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+        desired_capacity: 2
+        launch_config_name: 'launch_config'
+        max_size: 2
+        min_size: 1
+
+     - name: Gather information about all instances
+       amazon.aws.ec2_instance_info:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        filters:
+           instance-state-name: ["running"]
+       register: ec2_info
+    
+     - name: Display Public IP Addresses of instances
+       debug:
+          var: ec2_info.instances | map(attribute='public_ip_address') | list
