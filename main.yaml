@@ -3,13 +3,13 @@
 - hosts: localhost
   vars_prompt:
      - name: aws_access_key
-       prompt: "Enter AWS access key"
+       prompt: "Enter AWS access key" # Prompt the user to enter the AWS access key
        private: no
      - name: aws_secret_key
-       prompt: "Enter AWS secret key"
+       prompt: "Enter AWS secret key" # Prompt the user to enter the AWS secret key
        private: no
      - name: region
-       prompt: "Enter the region"
+       prompt: "Enter the region" # Prompt the user to enter the AWS region
        private: no
   tasks:
      - name: Ensure boto existence
@@ -18,14 +18,14 @@
           - boto3
           - botocore
         executable: pip3
-        state: present
+        state: present # Ensure that the required Python packages (boto3, botocore) are installed
 
      - name: Creating Security Group
        amazon.aws.ec2_security_group:
          aws_access_key: "{{ aws_access_key }}"
          aws_secret_key: "{{ aws_secret_key }}"
-         name: "high_az_sg"
-         description: Security Group for High AZ Server
+         name: "high_az_sg" # Set the name of the security group
+         description: Security Group for High AZ Server # Set the description of the security group
          region: "{{ region }}"
          rules:
            - proto: tcp
@@ -35,13 +35,13 @@
            - proto: tcp
              from_port: 80
              to_port: 80
-             cidr_ip: 0.0.0.0/0
+             cidr_ip: 0.0.0.0/0 # Define inbound rules for SSH and HTTP traffic
          rules_egress:
            - proto: tcp
              from_port: 0
              to_port: 6553
-             cidr_ip: 0.0.0.0/0
-       register: security_group
+             cidr_ip: 0.0.0.0/0 # Define an egress rule allowing all outbound traffic
+       register: security_group # Store the security group information in the variable "security_group"
 
      - name: Creating ELB
        amazon.aws.elb_classic_lb:
@@ -51,14 +51,14 @@
         zones:
           - eu-central-1a
           - eu-central-1b
-          - eu-central-1c
-        security_group_ids: "{{ security_group.group_id }}"
-        name: "high-az-elb"
+          - eu-central-1c # Specify the availability zones where the ELB will be created
+        security_group_ids: "{{ security_group.group_id }}" # Assign the security group to the ELB
+        name: "high-az-elb" # Set the name of the ELB
 
         listeners:
           - protocol: http
             load_balancer_port: 80
-            instance_port: 80  
+            instance_port: 80 # Configure the ELB to listen on port 80 and forward traffic to instances on port 80
 
         health_check:
           ping_protocol: tcp
@@ -66,32 +66,32 @@
           response_timeout: 5
           unhealthy_threshold: 2
           healthy_threshold: 2
-          interval: 30
+          interval: 30 # Configure health checks for the ELB
 
         cross_az_load_balancing: "yes"
         idle_timeout: 400
         connection_draining_timeout: 400
-        state: present
-       register: elb
+        state: present # Create the ELB with the specified configuration
+       register: elb # Store the ELB information in the variable "elb"
 
      - name: Set DNS Addresse
        set_fact:
-        dns_address: "http://{{ elb.elb.dns_name }}"
+        dns_address: "http://{{ elb.elb.dns_name }}" # Set the DNS address of the ELB
 
      - name: Display DNS Address
        debug:
-          var: dns_address
+          var: dns_address # Print the DNS address of the ELB
 
      - name: Creating launch configuration
        community.aws.autoscaling_launch_config:
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
-        name: "launch_config"
-        image_id: "ami-04e601abe3e1a910f"
-        key_name: "key_pair"
-        instance_type: "t2.micro"
+        name: "launch_config" # Set the name of the launch configuration
+        image_id: "ami-04e601abe3e1a910f" # Set the ID of the Amazon Machine Image (AMI) to use
+        key_name: "key_pair" # Set the name of the key pair to use for SSH access
+        instance_type: "t2.micro" # Set the instance type for the Auto Scaling group
         region: "{{ region }}"
-        security_groups: [ "{{ security_group.group_id }}" ]
+        security_groups: [ "{{ security_group.group_id }}" ] # Assign the security group to the launch configuration
         user_data: |
           #!/bin/bash
           # Update packages and install the Apache web server
@@ -101,21 +101,21 @@
           systemctl start apache2
           systemctl enable --now apache2
           systemctl restart apache2
-        state: present
-       register: lc_info
+        state: present # Create the launch configuration with the specified configuration
+       register: lc_info # Store the launch configuration information in the variable "lc_info"
 
      - name: Creating Auto Scaling Group
        amazon.aws.autoscaling_group:
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
-        region: "{{ region }}"
-        name: "asGroup"
-        load_balancers: [ 'high-az-elb' ]
-        availability_zones: ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-        desired_capacity: 2
-        launch_config_name: 'launch_config'
-        max_size: 2
-        min_size: 1
+        region: "{{ region }}" # Set the name of the Auto Scaling group
+        name: "asGroup" # Set the name of the Auto Scaling group
+        load_balancers: [ 'high-az-elb' ] # Associate the Auto Scaling group with the ELB
+        availability_zones: ["eu-central-1a", "eu-central-1b", "eu-central-1c"] # Specify the availability zones for the Auto Scaling group
+        desired_capacity: 2 # Set the desired capacity (number of instances) for the Auto Scaling group
+        launch_config_name: 'launch_config' # Specify the name of the launch configuration to use
+        max_size: 2 # Set the maximum number of instances in the Auto Scaling group
+        min_size: 1 # Set the minimum number of instances in the Auto Scaling group
 
      - name: Gather information about all instances
        amazon.aws.ec2_instance_info:
@@ -123,9 +123,9 @@
         aws_secret_key: "{{ aws_secret_key }}"
         region: "{{ region }}"
         filters:
-           instance-state-name: ["running"]
-       register: ec2_info
+           instance-state-name: ["running"] # Retrieve information about running instances
+       register: ec2_info # Store the instance information in the variable "ec2_info
     
      - name: Display Public IP Addresses of instances
        debug:
-          var: ec2_info.instances | map(attribute='public_ip_address') | list
+          var: ec2_info.instances | map(attribute='public_ip_address') | list # Print the public IP addresses of the instances
