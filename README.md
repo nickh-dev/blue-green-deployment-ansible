@@ -54,3 +54,6 @@ Here's a breakdown of the playbook's structure and tasks:
 3. Run the playbook using the following command: "sudo ansible-playbook main.yaml"
 4. Follow the prompts to enter your AWS access key and secret key.
 5. The playbook will execute the tasks to create the necessary resources on AWS and display the DNS address and public IP addresses of the instances.
+
+# Link for the architecture
+Follow this link to explore the architecture --> https://drive.google.com/file/d/15k7ed6hlgrCej93fuz9_otAjLj7YhrsQ/view?usp=sharing
