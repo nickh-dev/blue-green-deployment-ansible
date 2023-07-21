@@ -1,0 +1,80 @@
+---
+
+- hosts: localhost
+  vars_prompt:
+    - name: aws_access_key
+      prompt: "Enter AWS access key"
+      private: no
+    - name: aws_secret_key
+      prompt: "Enter AWS secret key"
+      private: no
+    - name: region
+      prompt: "Enter the region"
+      private: no
+  tasks:
+
+    - name: Gather information about all instances
+      amazon.aws.ec2_instance_info:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        filters:
+          instance-state-name: ["running"]
+      register: ec2_info
+      
+    - name: Detaching Security Group from EC2 Instances
+      amazon.aws.ec2_instance:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        instance_ids: "{{ item.instances }}"
+        security_groups: "high_az_sg"
+        state: absent
+      loop: "{{ ec2_info.instances }}"
+      when: item.instances | length > 0
+
+    - name: Deleting Scheduled Actions
+      community.aws.autoscaling_scheduled_action:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        scheduled_action_name: "{{ item.scheduled_action_name }}"
+        autoscaling_group_name: "{{ item.autoscaling_group_name }}"
+        state: absent
+      loop:
+        - "{{ turn_on }}"
+        - "{{ turn_off }}"
+      when:
+        - item is defined
+
+    - name: Deleting Auto Scaling Group
+      community.aws.autoscaling_group:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        name: "asGroup"
+        state: absent
+
+    - name: Deleting Launch Configuration
+      community.aws.autoscaling_launch_config:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        name: "launch_config"
+        state: absent
+
+    - name: Deregistering and Deleting Load Balancer
+      amazon.aws.elb_classic_lb:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        name: "high-az-elb"
+        state: absent
+
+    - name: Deleting Security Group
+      amazon.aws.ec2_security_group:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        name: "high_az_sg"
+        region: "{{ region }}"
+        state: absent

@@ -96,13 +96,39 @@
           #!/bin/bash
           # Update packages and install the Apache web server
           sudo apt update
-          sudo apt install apache2 -y
+          sudo apt install nginx -y
+
+          # Get the instance metadata
+          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+          INSTANCE_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+          # Create a custom HTML page with instance details
+
+          cat << EOF | sudo tee /var/www/html/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Check High Availability</title>
+          </head>
+          <body>
+              <h1>Hello from Instance $INSTANCE_ID</h1>
+              <p>Public IP: $INSTANCE_PUBLIC_IP</p>
+          </body>
+          </html>
+          EOF
+
           # Start and enable Apache to automatically start at boot time
-          systemctl start apache2
+          systemctl start nginx
           systemctl enable --now apache2
+<<<<<<< HEAD:main.yaml
           systemctl restart apache2
         state: present # Create the launch configuration with the specified configuration
        register: lc_info # Store the launch configuration information in the variable "lc_info"
+=======
+
+        state: present
+       register: lc_info
+>>>>>>> 233e183 (updated):create.yaml
 
      - name: Creating Auto Scaling Group
        amazon.aws.autoscaling_group:
@@ -116,6 +142,34 @@
         launch_config_name: 'launch_config' # Specify the name of the launch configuration to use
         max_size: 2 # Set the maximum number of instances in the Auto Scaling group
         min_size: 1 # Set the minimum number of instances in the Auto Scaling group
+
+     - name: Schedule for turning on instances
+       community.aws.autoscaling_scheduled_action:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        scheduled_action_name: "turn_on"
+        autoscaling_group_name: "asGroup"
+        min_size: 1
+        max_size: 3
+        desired_capacity: 2
+        recurrence: 0 8 * * *
+        state: present
+       register: turn_on
+
+     - name: Schedule for turning off instances
+       community.aws.autoscaling_scheduled_action:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        scheduled_action_name: "turn_off"
+        autoscaling_group_name: "asGroup"
+        min_size: 0
+        max_size: 1
+        desired_capacity: 0
+        recurrence: 0 20 * * *
+        state: present
+       register: turn_off
 
      - name: Gather information about all instances
        amazon.aws.ec2_instance_info:
