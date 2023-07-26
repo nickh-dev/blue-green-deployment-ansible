@@ -119,7 +119,7 @@
 
           # Start and enable Apache to automatically start at boot time
           systemctl start nginx
-          systemctl enable --now apache2
+          systemctl enable --now nginx
 <<<<<<< HEAD:main.yaml
           systemctl restart apache2
         state: present # Create the launch configuration with the specified configuration
