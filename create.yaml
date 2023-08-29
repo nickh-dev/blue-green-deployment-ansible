@@ -119,15 +119,9 @@
           # Start and enable Apache to automatically start at boot time
           systemctl start nginx
           systemctl enable --now nginx
-<<<<<<< HEAD:main.yaml
           systemctl restart apache2
         state: present # Create the launch configuration with the specified configuration
        register: lc_info # Store the launch configuration information in the variable "lc_info"
-=======
-
-        state: present
-       register: lc_info
->>>>>>> 233e183 (updated):create.yaml
 
      - name: Creating Auto Scaling Group
        amazon.aws.autoscaling_group:
